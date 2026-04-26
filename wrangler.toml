@@ -1,0 +1,18 @@
+name = "mc-srv-worker"
+main = "src/index.js"
+compatibility_date = "2025-08-11"
+
+# KV
+[[kv_namespaces]]
+binding = "MC_KV"
+id = "f7a0789b016b49a69f65db7fcdf37ec5"
+
+[vars]
+CF_API_TOKEN = ""  #仅编辑DNS和单域名即可
+CF_ZONE_ID = ""   #域名概览下面有
+BASE_DOMAIN = "zako.mom"
+RATE_LIMIT = "5"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>MC Debug 面板</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>🧪 MC Debug 面板</h1>
+
+    <input id="address" placeholder="example.com:25565">
+    <input id="prefix" placeholder="前缀（可选）">
+
+    <button onclick="runDebug()">生成 + Debug</button>
+
+    <pre id="log"></pre>
+  </div>
+
+  <script>
+    async function runDebug() {
+      const address = document.getElementById("address").value;
+      const prefix = document.getElementById("prefix").value;
+
+      const logBox = document.getElementById("log");
+      logBox.innerText = "请求中...\n";
+
+      try {
+        const res = await fetch("/api/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address, prefix })
+        });
+
+        const data = await res.json();
+
+        logBox.innerText =
+          "HTTP状态: " + res.status + "\n\n" +
+          JSON.stringify(data, null, 2);
+      } catch (e) {
+        logBox.innerText = "请求失败:\n" + e.stack;
+      }
+    }
+  </script>
+</body>
+</html>
