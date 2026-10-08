@@ -124,6 +124,103 @@ function setButtonsLoading(loading) {
   });
 }
 
+// ===== Cloudflare Turnstile (可选的人机验证) =====
+// 由服务端 /api/config 决定是否启用；未启用时整段逻辑完全不参与。
+const turnstile = {
+  enabled: false,
+  action: 'create',
+  widgetId: null,
+  token: ''
+};
+
+function setTurnstileStatus(msg) {
+  const el = document.getElementById('turnstile-status');
+  if (el) el.textContent = msg || '';
+}
+
+function loadTurnstileScript() {
+  return new Promise(resolve => {
+    if (window.turnstile) {
+      resolve(true);
+      return;
+    }
+
+    window.onTurnstileLoad = () => resolve(true);
+
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad';
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+
+    // 兜底：脚本被广告拦截器之类挡掉时不要永远挂起
+    setTimeout(() => resolve(Boolean(window.turnstile)), 10000);
+  });
+}
+
+async function initTurnstile() {
+  let cfg;
+
+  try {
+    const res = await fetch('/api/config');
+    cfg = await res.json();
+  } catch {
+    return; // 拿不到配置就当没开启；服务端仍会独立校验
+  }
+
+  const conf = (cfg && cfg.turnstile) || {};
+  if (!conf.enabled || !conf.siteKey) return;
+
+  turnstile.enabled = true;
+  turnstile.action = conf.action || 'create';
+
+  const slot = document.getElementById('turnstile-slot');
+  if (slot) slot.classList.remove('hidden');
+
+  const loaded = await loadTurnstileScript();
+  if (!loaded) {
+    setTurnstileStatus('人机验证组件加载失败，请刷新页面重试');
+    return;
+  }
+
+  turnstile.widgetId = window.turnstile.render('#turnstile-widget', {
+    sitekey: conf.siteKey,
+    action: turnstile.action,
+    callback: token => {
+      turnstile.token = token;
+      setTurnstileStatus('');
+    },
+    'expired-callback': () => {
+      turnstile.token = '';
+      setTurnstileStatus('验证已过期，请重新验证');
+    },
+    'timeout-callback': () => {
+      turnstile.token = '';
+      setTurnstileStatus('验证超时，请重新验证');
+    },
+    'error-callback': () => {
+      turnstile.token = '';
+      setTurnstileStatus('人机验证出错，请重新验证');
+    }
+  });
+}
+
+// Turnstile 令牌是一次性的：每次请求结束后都必须 reset，否则重试必然失败
+function resetTurnstile() {
+  if (!turnstile.enabled) return;
+
+  turnstile.token = '';
+
+  if (turnstile.widgetId !== null && window.turnstile) {
+    try {
+      window.turnstile.reset(turnstile.widgetId);
+    } catch {
+      // 组件已被移除等情况，忽略
+    }
+  }
+}
+
 // ===== Create =====
 async function create() {
   const address = document.getElementById('address').value.trim();
@@ -135,12 +232,22 @@ async function create() {
     return;
   }
 
+  if (turnstile.enabled && !turnstile.token) {
+    showError('请先完成人机验证', '完成上方的人机验证后即可生成域名');
+    return;
+  }
+
   setButtonsLoading(true);
   showLoading('正在生成域名...');
 
-  const res = await request('/api/create', { address, prefix });
+  const res = await request('/api/create', {
+    address,
+    prefix,
+    'cf-turnstile-response': turnstile.token
+  });
 
   setButtonsLoading(false);
+  resetTurnstile();
 
   if (res.error) {
     showError('创建失败', res.error);
@@ -232,3 +339,6 @@ document.addEventListener('keydown', (e) => {
     if (active && active.id === 'address') create();
   }
 });
+
+// ===== Boot =====
+initTurnstile();

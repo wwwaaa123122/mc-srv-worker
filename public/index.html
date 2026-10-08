@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=3">
+  <link rel="stylesheet" href="./style.css?v=5">
 </head>
 <body>
 
@@ -60,6 +60,14 @@
             <input id="prefix" type="text" placeholder="留空则自动生成" autocomplete="off">
           </div>
         </div>
+
+        <!-- Cloudflare Turnstile 人机验证（仅当服务端开启时显示） -->
+        <div id="turnstile-slot" class="turnstile-slot hidden">
+          <span class="turnstile-label">人机验证</span>
+          <div id="turnstile-widget"></div>
+          <div id="turnstile-status" class="turnstile-status"></div>
+        </div>
+
         <button class="btn btn-primary" onclick="create()">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/>
@@ -139,8 +147,12 @@
   <footer class="footer">
     <span>遇到问题？</span>
     <a href="mailto:wwwaaa123122@outlook.com">联系作者</a>
+    <div class="footer-note">
+      如遗失 Authkey（授权码），请携带注册时相关信息
+      <a href="mailto:wwwaaa123122@outlook.com">联系作者</a>
+    </div>
   </footer>
 
-  <script src="./app.js?v=3"></script>
+  <script src="./app.js?v=5"></script>
 </body>
 </html>

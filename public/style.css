@@ -233,6 +233,35 @@ body {
   font-weight: 400;
 }
 
+/* ===== Cloudflare Turnstile ===== */
+.turnstile-slot {
+  margin-bottom: 16px;
+}
+
+.turnstile-slot.hidden {
+  display: none;
+}
+
+.turnstile-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.turnstile-status {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+  min-height: 1em;
+}
+
+.turnstile-status:empty {
+  min-height: 0;
+  margin-top: 0;
+}
+
 .input-wrapper {
   display: flex;
   align-items: center;
@@ -507,8 +536,18 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 6px;
   padding-bottom: 8px;
+}
+
+/* 单独占一行，不与上面的「遇到问题？」挤在一起 */
+.footer-note {
+  flex-basis: 100%;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--text-muted);
 }
 
 .footer a {

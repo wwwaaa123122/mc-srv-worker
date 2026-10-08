@@ -4,6 +4,8 @@ import { deleteDNS } from "./delete";
 import { generateAuthCode, verifyAuthCode } from "./auth";
 import { rateLimitCheck } from "./rateLimit";
 import { validateInput } from "./validator";
+import { turnstileConfig, verifyTurnstile } from "./turnstile";
+import { isBlockedTarget, blockedTargetReason } from "./ipGuard";
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -19,6 +21,18 @@ export default {
     try {
       const url = new URL(request.url);
 
+      // 站点配置（前端启动时读取，决定是否渲染 Turnstile）
+      if (url.pathname === "/api/config" && request.method === "GET") {
+        const { enabled, siteKey } = turnstileConfig(env);
+        return json({
+          turnstile: {
+            enabled,
+            siteKey: enabled ? siteKey : "",
+            action: "create"
+          }
+        });
+      }
+
       // API routes
       if (url.pathname === "/api/create" && request.method === "POST") {
         const ip = request.headers.get("cf-connecting-ip") || "";
@@ -30,6 +44,15 @@ export default {
 
         const body = await request.json();
         const { address, prefix, authCode: adminCode } = body;
+
+        const human = await verifyTurnstile(
+          env,
+          body["cf-turnstile-response"] ?? body.turnstileToken,
+          ip
+        );
+        if (!human.ok) {
+          return json({ error: human.error }, 403);
+        }
 
         if (env.REQUIRE_AUTH === "true") {
           if (!verifyAuthCode(env.ADMIN_CODE, adminCode)) {
@@ -43,6 +66,10 @@ export default {
         }
 
         const { host, port } = parsed;
+
+        if (isBlockedTarget(host)) {
+          return json({ error: blockedTargetReason(host) }, 403);
+        }
 
         const sub =
           (prefix && prefix.trim()) ||
@@ -62,6 +89,10 @@ export default {
 
         if (!sub || !target || !port || !authCode) {
           return json({ error: "参数不完整" }, 400);
+        }
+
+        if (isBlockedTarget(target)) {
+          return json({ error: blockedTargetReason(target) }, 403);
         }
 
         const result = await updateDNS(env, sub, target, port, authCode);
