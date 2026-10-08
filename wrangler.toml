@@ -7,11 +7,27 @@ compatibility_date = "2025-08-11"
 binding = "MC_KV"
 id = "f7a0789b016b49a69f65db7fcdf37ec5"
 
+# 注意：
+# - CF_API_TOKEN（仅编辑 DNS 权限）与 GUARD_SECRET、TURNSTILE_SECRET 走 Secret
+#   （npx wrangler secret put <NAME>），不放在本文件（仓库为公开仓库）。
+# - DRY_RUN / 空 CF_API_TOKEN 时跳过真实 DNS 写入，仅用于本地开发与冒烟测试。
 [vars]
-CF_API_TOKEN = ""  #仅编辑DNS和单域名即可
-CF_ZONE_ID = ""   #域名概览下面有
+API_ENABLED = "true"
 BASE_DOMAIN = "zako.mom"
+CF_ZONE_ID = "b9c8a390c8db6e3bd9916fa00600eecd"
+GUARD_API = "https://guard.sad.kim"
+GUARD_SITE_KEY = "3808d17713"
 RATE_LIMIT = "5"
+TURNSTILE_ENABLED = "true"
+TURNSTILE_HOSTNAMES = "zako.mom"
+TURNSTILE_SITE_KEY = "0x4AAAAAAEyNa7Mm2SziAMGd"
+
+# 论坛账号系统（星辰旅人论坛 i.182030.xyz）
+FORUM_API_BASE = "https://i.182030.xyz"
+FORUM_ISSUER = "https://i.182030.xyz"
+FORUM_JWKS_URL = "https://i.182030.xyz/.well-known/jwks.json"
+FORUM_AUDIENCE = "api"
+USER_RECORD_LIMIT = "10"
 
 [assets]
 directory = "./public"

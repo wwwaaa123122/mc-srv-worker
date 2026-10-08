@@ -603,3 +603,209 @@ body {
     height: 200px;
   }
 }
+/* ===== 通用隐藏（卡片切换 / 列表状态） ===== */
+.hidden {
+  display: none !important;
+}
+
+/* ===== 论坛账号卡片 ===== */
+.badge-auth {
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--accent-blue);
+}
+
+.auth-hint {
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 25%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.user-avatar.hidden {
+  display: none;
+}
+
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.user-nickname {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-username {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===== 按钮（次级 / 小号） ===== */
+.btn-ghost {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-ghost:active {
+  transform: none;
+}
+
+.btn-sm {
+  padding: 7px 12px;
+  font-size: 0.8rem;
+  gap: 6px;
+}
+
+.card-action {
+  margin-left: auto;
+}
+
+/* ===== 我的域名列表 ===== */
+.records-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.records-loading,
+.records-empty {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 18px 0;
+}
+
+.record-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+}
+
+.record-info {
+  min-width: 0;
+}
+
+.record-domain {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-target {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ===== 认领历史域名 ===== */
+.claim-box {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--glass-border);
+}
+
+.claim-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.claim-row {
+  display: flex;
+  gap: 8px;
+}
+
+.claim-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  font-family: var(--font);
+}
+
+.claim-row input:focus {
+  border-color: var(--accent);
+}
+
+.records-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+@media (max-width: 480px) {
+  .claim-row {
+    flex-direction: column;
+  }
+
+  .record-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .record-actions {
+    justify-content: flex-end;
+  }
+
+  .card-action {
+    margin-left: 0;
+  }
+}

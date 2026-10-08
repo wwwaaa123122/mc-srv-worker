@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=5">
+  <link rel="stylesheet" href="./style.css?v=6">
 </head>
 <body>
 
@@ -30,6 +30,70 @@
       <h1 class="header-title">MC 免端口域名</h1>
       <p class="header-subtitle">为你的 Minecraft 服务器生成带 SRV 记录的免端口域名</p>
     </header>
+
+    <!-- Card: 论坛账号 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-badge badge-auth">账号</span>
+        <h2 class="card-title">星辰旅人论坛账号</h2>
+      </div>
+      <div class="card-body">
+        <!-- 已登录 -->
+        <div id="auth-logged-in" class="hidden">
+          <div class="user-chip">
+            <img id="user-avatar" class="user-avatar" alt="头像" src="">
+            <div class="user-meta">
+              <span id="user-nickname" class="user-nickname"></span>
+              <span id="user-username" class="user-username"></span>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="logout()">退出登录</button>
+          </div>
+          <p class="auth-hint">创建的域名将自动绑定到你的账号，管理时无需授权码，且免人机验证。</p>
+        </div>
+        <!-- 未登录 -->
+        <div id="auth-logged-out">
+          <p class="auth-hint">登录论坛账号后，域名将绑定到你的账号：管理免授权码、创建免人机验证。不登录也可以继续匿名使用。</p>
+          <div class="input-group">
+            <label class="input-label" for="login-identifier">用户名 / 邮箱</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <input id="login-identifier" type="text" placeholder="论坛用户名或注册邮箱" autocomplete="username">
+            </div>
+          </div>
+          <div class="input-group">
+            <label class="input-label" for="login-password">密码</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <input id="login-password" type="password" placeholder="8 位以上" autocomplete="current-password">
+            </div>
+          </div>
+          <div id="forum-turnstile-slot" class="turnstile-slot hidden">
+            <span class="turnstile-label">人机验证（论坛登录）</span>
+            <div id="forum-turnstile-widget"></div>
+            <div id="forum-turnstile-status" class="turnstile-status"></div>
+          </div>
+          <div class="btn-group">
+            <button id="login-btn" class="btn btn-primary" onclick="login()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                <polyline points="10 17 15 12 10 7"/>
+                <line x1="15" y1="12" x2="3" y2="12"/>
+              </svg>
+              <span>登录论坛账号</span>
+            </button>
+            <a id="register-link" class="btn btn-ghost" href="https://forum.182030.xyz/register" target="_blank" rel="noopener">
+              <span>注册新账号</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Card: 创建域名 -->
     <div class="card">
@@ -61,7 +125,7 @@
           </div>
         </div>
 
-        <!-- Cloudflare Turnstile 人机验证（仅当服务端开启时显示） -->
+        <!-- Cloudflare Turnstile 人机验证（匿名创建时需要；已登录免验证） -->
         <div id="turnstile-slot" class="turnstile-slot hidden">
           <span class="turnstile-label">人机验证</span>
           <div id="turnstile-widget"></div>
@@ -76,6 +140,35 @@
           </svg>
           <span>生成域名</span>
         </button>
+      </div>
+    </div>
+
+    <!-- Card: 我的域名（登录后显示） -->
+    <div id="records-card" class="card hidden">
+      <div class="card-header">
+        <span class="card-badge badge-manage">我的域名</span>
+        <h2 class="card-title">账号绑定的解析</h2>
+        <button class="btn btn-ghost btn-sm card-action" onclick="loadMyRecords()" title="刷新列表">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"/>
+            <polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          <span>刷新</span>
+        </button>
+      </div>
+      <div class="card-body">
+        <div id="records-list" class="records-list"></div>
+
+        <div class="claim-box">
+          <div class="claim-title">认领历史域名</div>
+          <div class="claim-row">
+            <input id="claim-sub" type="text" placeholder="前缀" autocomplete="off">
+            <input id="claim-authcode" type="text" placeholder="该记录的授权码" autocomplete="off">
+            <button class="btn btn-accent btn-sm" onclick="claimRecord()"><span>认领</span></button>
+          </div>
+          <p class="records-hint">登录前创建的域名，可用前缀 + 授权码认领到当前账号。</p>
+        </div>
       </div>
     </div>
 
@@ -109,7 +202,7 @@
           </div>
         </div>
         <div class="input-group">
-          <label class="input-label" for="authCode">授权码</label>
+          <label class="input-label" for="authCode">授权码 <span class="optional">(登录后管理自己绑定的域名可留空)</span></label>
           <div class="input-wrapper">
             <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -148,11 +241,11 @@
     <span>遇到问题？</span>
     <a href="mailto:wwwaaa123122@outlook.com">联系作者</a>
     <div class="footer-note">
-      如遗失 Authkey（授权码），请携带注册时相关信息
+      如遗失 Authkey（授权码），登录论坛账号后可在「我的域名」中直接管理，或
       <a href="mailto:wwwaaa123122@outlook.com">联系作者</a>
     </div>
   </footer>
 
-  <script src="./app.js?v=5"></script>
+  <script src="./app.js?v=6"></script>
 </body>
 </html>
