@@ -18,7 +18,7 @@ export async function deleteDNS(env, sub, opts = {}) {
     "Content-Type": "application/json",
   };
 
-  const dryRun = !env.CF_API_TOKEN || env.DRY_RUN === "true";
+  const dryRun = env.DRY_RUN === "true";
 
   const key = sub;
   const dataRaw = await env.MC_KV.get(key);

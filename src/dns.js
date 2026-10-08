@@ -3,7 +3,7 @@
  *
  * @param userId 论坛用户 id（已登录创建时传入，用于账号绑定；匿名创建传 null）
  *
- * DRY_RUN=未配置 CF_API_TOKEN 时跳过真实 DNS 写入（仅本地开发/冒烟测试用），
+ * DRY_RUN=true 时跳过真实 DNS 写入（仅本地开发/冒烟测试用），
  * 只落 KV，便于在本地完整走通业务流程。
  */
 export async function createDNSRecords(env, sub, targetHost, port, userId = null) {
@@ -14,8 +14,9 @@ export async function createDNSRecords(env, sub, targetHost, port, userId = null
     "Content-Type": "application/json",
   };
 
-  // 本地开发/冒烟测试：无 API Token 或显式 DRY_RUN=true 时不碰真实 DNS
-  const dryRun = !env.CF_API_TOKEN || env.DRY_RUN === "true";
+  // 本地开发/冒烟测试：仅当显式 DRY_RUN=true 时跳过真实 DNS 写入
+  // （不能因 CF_API_TOKEN 缺失而静默干跑——生产配置丢失时应当报错而不是假装成功）
+  const dryRun = env.DRY_RUN === "true";
 
   const isIP = /^\d+\.\d+\.\d+\.\d+$/.test(targetHost);
 

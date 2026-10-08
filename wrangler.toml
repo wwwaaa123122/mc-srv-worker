@@ -2,6 +2,10 @@ name = "mc-srv-worker"
 main = "src/index.js"
 compatibility_date = "2025-08-11"
 
+# 保留 Dashboard 上已配置、但未写入本文件的变量（仓库为公开仓库，
+# CF_API_TOKEN / GUARD_SECRET 等敏感值只保存在 Dashboard，不进 Git）
+keep_vars = true
+
 # KV
 [[kv_namespaces]]
 binding = "MC_KV"
@@ -10,7 +14,7 @@ id = "f7a0789b016b49a69f65db7fcdf37ec5"
 # 注意：
 # - CF_API_TOKEN（仅编辑 DNS 权限）与 GUARD_SECRET、TURNSTILE_SECRET 走 Secret
 #   （npx wrangler secret put <NAME>），不放在本文件（仓库为公开仓库）。
-# - DRY_RUN / 空 CF_API_TOKEN 时跳过真实 DNS 写入，仅用于本地开发与冒烟测试。
+# - DRY_RUN=true 时跳过真实 DNS 写入，仅用于本地开发与冒烟测试。
 [vars]
 API_ENABLED = "true"
 BASE_DOMAIN = "zako.mom"
