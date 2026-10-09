@@ -524,99 +524,104 @@ async function login() {
 }
 
 /**
- * 同步论坛登录状态：弹窗打开论坛同源桥接页（第一方上下文才能读到论坛自己的登录态，
- * 第三方 iframe 的 localStorage 被浏览器分区，读不到），通过 postMessage 握手取回凭证。
+ * 同步论坛登录状态：整页跳转论坛桥接页（第一方上下文才能读到论坛自己的登录态，
+ * 第三方 iframe 的 localStorage 被浏览器分区，读不到）。
+ * 桥接页签发「一次性 ticket」后重定向回来，本站后端用 ticket 兑换真正的凭证
+ * （凭证只在服务器之间流转，URL 里只出现一次性短命 ticket）。
  */
-async function syncForumLogin() {
-  const origin = (siteConfig.forum.ssoOrigin || 'https://forum.182030.xyz').replace(/\/+$/, '');
+function syncForumLogin() {
   if (auth.accessToken) {
     setAuthStatus('当前已登录：@' + ((auth.user && auth.user.username) || ''), false);
     return;
   }
-
-  const btn = document.getElementById('sync-btn');
-  const originalHtml = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.textContent = '正在同步…'; }
-  setAuthStatus('正在打开论坛登录同步窗口…（若被拦截请允许本站弹窗）', false);
-
-  const popup = window.open(
-    origin + '/sso-bridge',
-    'starlr-sso-bridge',
-    'width=460,height=420,menubar=no,toolbar=no,location=no,status=no'
-  );
-
-  const restoreBtn = () => {
-    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = originalHtml; }
-  };
-
-  if (!popup) {
-    restoreBtn();
-    setAuthStatus('浏览器拦截了弹窗：请允许本站弹窗后重试，或直接输入账号密码登录', true);
+  const origin = (siteConfig.forum.ssoOrigin || 'https://forum.182030.xyz').replace(/\/+$/, '');
+  if (!origin) {
+    setAuthStatus('论坛登录同步暂不可用，请直接输入账号密码登录', true);
     return;
   }
 
-  let done = false;
-  let pingTimer = null;
-  let timeoutTimer = null;
+  // 防重放：本站生成随机 challenge，桥接页签发的 ticket 与之绑定，回来时校验
+  const challenge = (self.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2))
+    + '-' + Math.random().toString(36).slice(2, 10);
+  try {
+    sessionStorage.setItem('mc_sso_challenge', challenge);
+  } catch {
+    // sessionStorage 不可用时仍可继续（ticket 本身一次性 + 短 TTL）
+  }
 
-  const finish = (msg, isError) => {
-    if (done) return;
-    done = true;
-    if (pingTimer) clearInterval(pingTimer);
-    if (timeoutTimer) clearTimeout(timeoutTimer);
-    window.removeEventListener('message', onMessage);
-    restoreBtn();
-    try { if (!popup.closed) popup.close(); } catch { /* ignore */ }
-    if (msg !== null) setAuthStatus(msg, isError);
-  };
-
-  const onMessage = (e) => {
-    if (e.origin !== origin) return;              // 只信任论坛源
-    const d = e.data;
-    if (!d || d.type !== 'starlr-sso-response') return;
-
-    if (!d.ok || !d.accessToken) {
-      finish('论坛当前未登录（或登录状态已失效），请直接输入账号密码登录', true);
-      return;
-    }
-
-    auth.user = d.user || null;
-    auth.accessToken = d.accessToken;
-    auth.refreshToken = d.refreshToken || '';
-    const payload = decodeJwtPayload(auth.accessToken);
-    auth.exp = payload && payload.exp ? payload.exp : 0;
-    saveAuth();
-
-    const name = (auth.user && (auth.user.nickname || auth.user.username)) || '论坛账号';
-    finish('已同步论坛登录状态，欢迎 ' + name, false);
-    renderAuthState();
-    showSimpleSuccess('已同步论坛登录状态，欢迎 ' + name);
-  };
-
-  window.addEventListener('message', onMessage);
-
-  const ping = () => {
-    try { popup.postMessage({ type: 'starlr-sso-request' }, origin); } catch { /* ignore */ }
-  };
-  // 桥接页可能仍在加载：轮询握手直到收到响应、用户关窗或超时
-  pingTimer = setInterval(() => {
-    if (popup.closed) { finish('已取消论坛登录同步', false); return; }
-    ping();
-  }, 600);
-  ping();
-  timeoutTimer = setTimeout(() => finish('论坛登录同步超时，请直接输入账号密码登录', true), 20000);
+  setAuthStatus('正在跳转论坛完成登录同步…', false);
+  const returnUrl = location.origin + location.pathname;
+  location.href = origin + '/sso-bridge?redirect=' + encodeURIComponent(returnUrl) + '&challenge=' + encodeURIComponent(challenge);
 }
 
-/** 登出（撤销论坛侧会话 + 清理本地） */
-async function logout() {
-  if (auth.refreshToken) {
-    await forumApi('/api/auth/logout', { refreshToken: auth.refreshToken });
+/**
+ * 处理论坛桥接页重定向回来携带的 #sso_ticket / #sso=none / #sso=error。
+ * 返回 'adopted'（已登录）| 'handled'（已给出提示）| 'none'（与本站无关的 hash）。
+ */
+async function handleSSOReturn() {
+  if (!location.hash || (location.hash.indexOf('sso_ticket') === -1 && location.hash.indexOf('sso=') === -1)) {
+    return 'none';
   }
-  clearAuth();
-  resetForumTurnstile();
-  setAuthStatus('已退出登录，可重新登录或继续匿名使用', false);
+  const params = new URLSearchParams(location.hash.slice(1));
+  // 无论成败都先把凭证从地址栏清掉（replaceState 不留历史记录）
+  const clean = () => {
+    try {
+      history.replaceState(null, '', location.pathname + location.search);
+    } catch {
+      // ignore
+    }
+  };
+
+  if (params.get('sso') === 'none') {
+    clean();
+    setAuthStatus('论坛当前未登录（或登录状态已失效），请直接输入账号密码登录', true);
+    return 'handled';
+  }
+  if (params.get('sso') === 'error') {
+    clean();
+    setAuthStatus('论坛登录同步失败：' + (params.get('reason') || '未知原因'), true);
+    return 'handled';
+  }
+
+  const ticket = params.get('sso_ticket');
+  const challenge = params.get('sso_challenge');
+  clean();
+  if (!ticket || !challenge) return 'none';
+
+  const expected = sessionStorage.getItem('mc_sso_challenge');
+  try {
+    sessionStorage.removeItem('mc_sso_challenge');
+  } catch {
+    // ignore
+  }
+  if (!expected || expected !== challenge) {
+    setAuthStatus('登录同步校验失败（会话不匹配），请重新点击同步', true);
+    return 'handled';
+  }
+
+  setAuthStatus('正在完成论坛登录同步…', false);
+  const res = await request('/api/sso/redeem', { ticket, challenge });
+  if (res && res.error) {
+    setAuthStatus('登录同步失败：' + (res.error.message || res.error) + '，可直接用账号密码登录', true);
+    return 'handled';
+  }
+  if (!res || !res.accessToken) {
+    setAuthStatus('登录同步失败：未返回有效凭证，请重试或改用密码登录', true);
+    return 'handled';
+  }
+
+  auth.user = res.user || null;
+  auth.accessToken = res.accessToken;
+  auth.refreshToken = res.refreshToken;
+  const payload = decodeJwtPayload(res.accessToken);
+  auth.exp = (payload && payload.exp ? payload.exp : Math.floor(Date.now() / 1000) + (res.accessExpiresIn || 1800));
+  saveAuth();
+
+  const name = (auth.user && (auth.user.nickname || auth.user.username)) || '论坛账号';
+  setAuthStatus('');
   renderAuthState();
-  showSimpleSuccess('已退出登录');
+  showSimpleSuccess('已同步论坛登录状态，欢迎 ' + name);
+  return 'adopted';
 }
 
 /** 页面加载时恢复登录态 */
@@ -936,7 +941,13 @@ document.addEventListener('keydown', (e) => {
 // ===== Boot =====
 (async function boot() {
   await loadSiteConfig();
+  loadAuth();
+  const ssoState = await handleSSOReturn();
   await initCreateTurnstile();
   await initForumTurnstile();
-  await initAuth();
+  if (ssoState === 'adopted') {
+    renderAuthState();
+  } else {
+    await initAuth();
+  }
 })();

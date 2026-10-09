@@ -7,6 +7,7 @@
  *   - 创建时记录绑定到论坛用户，免人机验证、可用「我的域名」管理
  *   - GET  /api/my/records 列出当前账号绑定的记录
  *   - POST /api/claim      用 前缀 + 授权码 把历史记录认领到当前账号
+ *   - POST /api/sso/redeem 用论坛桥接页的一次性 ticket 兑换登录凭证（服务器对服务器）
  *   - 修改/删除：授权码 或 账号绑定关系，满足其一即可
  */
 import { createDNSRecords } from "./dns";
@@ -62,6 +63,55 @@ export default {
             action: "create"
           },
           forum
+        });
+      }
+
+      // 登录状态同步：用论坛桥接页签发的一次性 ticket 兑换凭证
+      // （浏览器只经手一次性短命 ticket；真正的 token 由本 Worker 与论坛 API 之间流转）
+      if (url.pathname === "/api/sso/redeem" && request.method === "POST") {
+        const ip = request.headers.get("cf-connecting-ip") || "";
+        if (!(await rateLimitCheck(env, `sso:${ip}`))) {
+          return json({ error: "操作过于频繁，请稍后再试" }, 429);
+        }
+
+        const body = await readJson(request);
+        if (!body) return json({ error: "请求体不是合法 JSON" }, 400);
+        const ticket = typeof body.ticket === "string" ? body.ticket.trim() : "";
+        const challenge = typeof body.challenge === "string" ? body.challenge.trim() : "";
+        if (!ticket || !challenge) {
+          return json({ error: "缺少登录同步凭证", code: "SSO_PARAMS_MISSING" }, 400);
+        }
+
+        const apiBase = (env.FORUM_API_BASE || "https://i.182030.xyz").replace(/\/+$/, "");
+        const origin = new URL(request.url).origin;
+        let upstream;
+        try {
+          upstream = await fetch(`${apiBase}/api/auth/site-login/redeem`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticket, challenge, origin })
+          });
+        } catch {
+          return json({ error: "论坛服务暂时不可达，请稍后重试", code: "SSO_UPSTREAM_ERROR" }, 502);
+        }
+
+        let data = null;
+        try {
+          data = await upstream.json();
+        } catch {
+          data = null;
+        }
+        if (!upstream.ok || !data || !data.accessToken) {
+          const message = (data && data.error && data.error.message) || "登录同步凭证无效或已过期";
+          return json({ error: message, code: (data && data.error && data.error.code) || "SSO_FAILED" }, 400);
+        }
+
+        return json({
+          success: true,
+          user: data.user || null,
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken || null,
+          accessExpiresIn: data.accessExpiresIn || null
         });
       }
 
