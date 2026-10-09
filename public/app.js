@@ -20,6 +20,13 @@ function showResult(type, title, lines) {
   resultEl.innerHTML = html;
   resultEl.classList.remove('hidden');
 
+  // 结果面板在页面底部：显示后滚入视口，否则用户以为"点了没反应"
+  try {
+    resultEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch {
+    // ignore
+  }
+
   // Auto-hide success after 10s
   if (type === 'success') {
     currentTimeout = setTimeout(() => {
@@ -113,7 +120,10 @@ async function request(url, data, opts = {}) {
       return { error: text };
     }
   } catch (e) {
-    return { error: e.message };
+    if (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+      return { error: '连接论坛超时，请检查网络后重试' };
+    }
+    return { error: e.message || '网络异常' };
   }
 }
 
@@ -129,7 +139,10 @@ async function getRequest(url, token) {
       return { error: text };
     }
   } catch (e) {
-    return { error: e.message };
+    if (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+      return { error: '连接论坛超时，请检查网络后重试' };
+    }
+    return { error: e.message || '网络异常' };
   }
 }
 
@@ -314,6 +327,15 @@ function resetForumTurnstile() {
   }
 }
 
+/** 账号卡片内联状态（比底部结果面板更靠近操作点，登录相关反馈一律走这里） */
+function setAuthStatus(msg, isError) {
+  const el = document.getElementById('login-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.toggle('hidden', !msg);
+  el.classList.toggle('error', !!isError);
+}
+
 function saveAuth() {
   localStorage.setItem(AUTH_KEY, JSON.stringify({
     user: auth.user,
@@ -349,7 +371,7 @@ function loadAuth() {
 
 function avatarUrl(user) {
   const base = (siteConfig.forum.apiBase || '').replace(/\/+$/, '');
-  const raw = user && user.avatar_url;
+  const raw = user && (user.avatarUrl || user.avatar_url);
   if (!raw) return '';
   if (/^https?:\/\//.test(raw)) return raw;
   return base + raw;
@@ -402,7 +424,9 @@ async function forumApi(path, body, opts = {}) {
     const res = await fetch(base + path, {
       method: opts.method || (body !== undefined ? 'POST' : 'GET'),
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      // 论坛不可达/被墙时不能无限等待：否则按钮一直是禁用态，看起来"点了没反应"
+      signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined
     });
     const text = await res.text();
     try {
@@ -411,7 +435,10 @@ async function forumApi(path, body, opts = {}) {
       return { error: text || `HTTP ${res.status}` };
     }
   } catch (e) {
-    return { error: e.message };
+    if (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+      return { error: '连接论坛超时，请检查网络后重试' };
+    }
+    return { error: e.message || '网络异常' };
   }
 }
 
@@ -446,34 +473,40 @@ async function login() {
   const password = document.getElementById('login-password').value;
 
   if (!identifier || !password) {
-    showError('请填写用户名和密码', '使用星辰旅人论坛的账号密码登录');
+    setAuthStatus('请填写用户名和密码', true);
     return;
   }
   if (forumTurnstile.enabled && !forumTurnstile.token) {
-    showError('请先完成人机验证', '完成论坛登录的人机验证后重试');
+    setAuthStatus('请先完成下方的人机验证，再点登录', true);
     return;
   }
 
   const btn = document.getElementById('login-btn');
+  const originalHtml = btn.innerHTML;
   btn.disabled = true;
   btn.style.opacity = '0.6';
-  showLoading('正在登录论坛账号...');
+  btn.textContent = '登录中…';
+  setAuthStatus('正在登录论坛账号…', false);
 
   const body = { identifier, password };
   if (forumTurnstile.enabled) body.turnstileToken = forumTurnstile.token;
 
-  const res = await forumApi('/api/auth/login', body);
-
-  btn.disabled = false;
-  btn.style.opacity = '1';
-  resetForumTurnstile();
+  let res;
+  try {
+    res = await forumApi('/api/auth/login', body);
+  } finally {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.innerHTML = originalHtml;
+    resetForumTurnstile();
+  }
 
   if (res && res.error) {
-    showError('登录失败', res.error.message || res.error);
+    setAuthStatus('登录失败：' + (res.error.message || res.error), true);
     return;
   }
   if (!res || !res.accessToken) {
-    showError('登录失败', '论坛服务未返回有效凭证');
+    setAuthStatus('登录失败：论坛服务未返回有效凭证', true);
     return;
   }
 
@@ -485,8 +518,93 @@ async function login() {
   saveAuth();
 
   document.getElementById('login-password').value = '';
+  setAuthStatus('');
   renderAuthState();
   showSimpleSuccess('登录成功，欢迎 ' + (auth.user && (auth.user.nickname || auth.user.username) || ''));
+}
+
+/**
+ * 同步论坛登录状态：弹窗打开论坛同源桥接页（第一方上下文才能读到论坛自己的登录态，
+ * 第三方 iframe 的 localStorage 被浏览器分区，读不到），通过 postMessage 握手取回凭证。
+ */
+async function syncForumLogin() {
+  const origin = (siteConfig.forum.ssoOrigin || 'https://forum.182030.xyz').replace(/\/+$/, '');
+  if (auth.accessToken) {
+    setAuthStatus('当前已登录：@' + ((auth.user && auth.user.username) || ''), false);
+    return;
+  }
+
+  const btn = document.getElementById('sync-btn');
+  const originalHtml = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.textContent = '正在同步…'; }
+  setAuthStatus('正在打开论坛登录同步窗口…（若被拦截请允许本站弹窗）', false);
+
+  const popup = window.open(
+    origin + '/sso-bridge',
+    'starlr-sso-bridge',
+    'width=460,height=420,menubar=no,toolbar=no,location=no,status=no'
+  );
+
+  const restoreBtn = () => {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = originalHtml; }
+  };
+
+  if (!popup) {
+    restoreBtn();
+    setAuthStatus('浏览器拦截了弹窗：请允许本站弹窗后重试，或直接输入账号密码登录', true);
+    return;
+  }
+
+  let done = false;
+  let pingTimer = null;
+  let timeoutTimer = null;
+
+  const finish = (msg, isError) => {
+    if (done) return;
+    done = true;
+    if (pingTimer) clearInterval(pingTimer);
+    if (timeoutTimer) clearTimeout(timeoutTimer);
+    window.removeEventListener('message', onMessage);
+    restoreBtn();
+    try { if (!popup.closed) popup.close(); } catch { /* ignore */ }
+    if (msg !== null) setAuthStatus(msg, isError);
+  };
+
+  const onMessage = (e) => {
+    if (e.origin !== origin) return;              // 只信任论坛源
+    const d = e.data;
+    if (!d || d.type !== 'starlr-sso-response') return;
+
+    if (!d.ok || !d.accessToken) {
+      finish('论坛当前未登录（或登录状态已失效），请直接输入账号密码登录', true);
+      return;
+    }
+
+    auth.user = d.user || null;
+    auth.accessToken = d.accessToken;
+    auth.refreshToken = d.refreshToken || '';
+    const payload = decodeJwtPayload(auth.accessToken);
+    auth.exp = payload && payload.exp ? payload.exp : 0;
+    saveAuth();
+
+    const name = (auth.user && (auth.user.nickname || auth.user.username)) || '论坛账号';
+    finish('已同步论坛登录状态，欢迎 ' + name, false);
+    renderAuthState();
+    showSimpleSuccess('已同步论坛登录状态，欢迎 ' + name);
+  };
+
+  window.addEventListener('message', onMessage);
+
+  const ping = () => {
+    try { popup.postMessage({ type: 'starlr-sso-request' }, origin); } catch { /* ignore */ }
+  };
+  // 桥接页可能仍在加载：轮询握手直到收到响应、用户关窗或超时
+  pingTimer = setInterval(() => {
+    if (popup.closed) { finish('已取消论坛登录同步', false); return; }
+    ping();
+  }, 600);
+  ping();
+  timeoutTimer = setTimeout(() => finish('论坛登录同步超时，请直接输入账号密码登录', true), 20000);
 }
 
 /** 登出（撤销论坛侧会话 + 清理本地） */
@@ -495,6 +613,8 @@ async function logout() {
     await forumApi('/api/auth/logout', { refreshToken: auth.refreshToken });
   }
   clearAuth();
+  resetForumTurnstile();
+  setAuthStatus('已退出登录，可重新登录或继续匿名使用', false);
   renderAuthState();
   showSimpleSuccess('已退出登录');
 }

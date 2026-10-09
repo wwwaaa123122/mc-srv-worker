@@ -603,6 +603,31 @@ body {
     height: 200px;
   }
 }
+/* ===== 账号卡片内联状态 / 同步按钮 ===== */
+.auth-status {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary, #6b7280);
+  word-break: break-word;
+}
+
+.auth-status.error {
+  color: #dc2626;
+}
+
+.auth-hint-sm {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.sync-btn {
+  margin-top: 10px;
+  width: 100%;
+  justify-content: center;
+}
+
 /* ===== 通用隐藏（卡片切换 / 列表状态） ===== */
 .hidden {
   display: none !important;

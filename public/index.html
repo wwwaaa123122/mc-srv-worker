@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=6">
+  <link rel="stylesheet" href="./style.css?v=7">
 </head>
 <body>
 
@@ -91,6 +91,11 @@
               <span>注册新账号</span>
             </a>
           </div>
+          <p id="login-status" class="auth-status hidden"></p>
+          <button id="sync-btn" class="btn btn-ghost btn-sm sync-btn" onclick="syncForumLogin()">
+            <span>已在论坛登录？点此同步登录状态</span>
+          </button>
+          <p class="auth-hint auth-hint-sm">同步会打开论坛窗口读取其登录状态，读不到时可正常用账号密码登录。</p>
         </div>
       </div>
     </div>
@@ -246,6 +251,6 @@
     </div>
   </footer>
 
-  <script src="./app.js?v=6"></script>
+  <script src="./app.js?v=7"></script>
 </body>
 </html>

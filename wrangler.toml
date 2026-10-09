@@ -26,11 +26,14 @@ TURNSTILE_ENABLED = "true"
 TURNSTILE_HOSTNAMES = "zako.mom"
 TURNSTILE_SITE_KEY = "0x4AAAAAAEyNa7Mm2SziAMGd"
 
-# 论坛账号系统（星辰旅人论坛 i.182030.xyz）
+# 论坛账号系统（星辰旅人论坛）：JWT(RS256) 验签 + 账号绑定
+# 两套签发方：i.182030.xyz（本站账号密码登录链）、x.182030.xyz（论坛网页端登录态，登录状态同步用）
 FORUM_API_BASE = "https://i.182030.xyz"
-FORUM_ISSUER = "https://i.182030.xyz"
-FORUM_JWKS_URL = "https://i.182030.xyz/.well-known/jwks.json"
+FORUM_ISSUERS = "https://i.182030.xyz,https://x.182030.xyz"
+FORUM_JWKS_URLS = "https://i.182030.xyz/.well-known/jwks.json,https://x.182030.xyz/.well-known/jwks.json"
 FORUM_AUDIENCE = "api"
+# 论坛前端自身源（"同步论坛登录状态"弹窗打开的桥接页所在域）
+FORUM_SSO_ORIGIN = "https://forum.182030.xyz"
 USER_RECORD_LIMIT = "10"
 
 [assets]

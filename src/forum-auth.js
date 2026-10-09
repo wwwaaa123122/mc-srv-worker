@@ -1,5 +1,5 @@
 /**
- * 论坛账号系统接入：星辰旅人论坛（i.182030.xyz）签发的 Access Token 验证。
+ * 论坛账号系统接入：星辰旅人论坛签发的 Access Token 验证。
  *
  * 论坛后端的 Access Token 为 RS256 签名的 JWT：
  *   header:  { alg: "RS256", typ: "JWT", kid }
@@ -7,24 +7,53 @@
  * 公钥通过 /.well-known/jwks.json 公布；本模块拉取 JWKS 并本地验签，
  * 不需要与论坛后端共享任何密钥。
  *
+ * 论坛有两套签发方（共享同一套 D1 用户数据，但 JWT 签名密钥各自独立）：
+ *   - forum-backend（i.182030.xyz）：本站"账号密码登录"走它签发的 Token；
+ *   - xingchen-forum-x（x.182030.xyz，同时服务 forum.182030.xyz）：
+ *     论坛网页端自身登录态签发的 Token（登录状态同步/桥接场景）。
+ * 两者 iss 不同、公钥不同，因此按 Token 的 iss 选择对应的 JWKS 验签。
+ *
  * 相关 vars（见 wrangler.toml）：
- *   FORUM_JWKS_URL — JWKS 地址
- *   FORUM_ISSUER   — 预期 iss
- *   FORUM_AUDIENCE — 预期 aud
+ *   FORUM_ISSUERS   — 逗号分隔的允许 iss 列表
+ *   FORUM_JWKS_URLS — 与 FORUM_ISSUERS 一一对应的 JWKS 地址列表
+ *   FORUM_ISSUER / FORUM_JWKS_URL — 旧的单值配置（兼容回退）
+ *   FORUM_AUDIENCE  — 预期 aud
+ *   FORUM_SSO_ORIGIN — 论坛站点自身的前端源（登录状态同步弹窗用）
  */
 
 const JWKS_TTL_MS = 10 * 60 * 1000;
 const CLOCK_SKEW_S = 30;
 
-let jwksCache = { keys: null, fetchedAt: 0 };
+/** JWKS 缓存：url → { keys, fetchedAt } */
+const jwksCache = new Map();
 const publicKeyCache = new Map();
 
 export function forumDefaults(env) {
   return {
-    jwksUrl: env.FORUM_JWKS_URL || "https://i.182030.xyz/.well-known/jwks.json",
-    issuer: env.FORUM_ISSUER || "https://i.182030.xyz",
-    audience: env.FORUM_AUDIENCE || "api"
+    audience: env.FORUM_AUDIENCE || "api",
+    ssoOrigin: (env.FORUM_SSO_ORIGIN || "https://forum.182030.xyz").replace(/\/+$/, "")
   };
+}
+
+function parseList(v) {
+  return String(v || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** iss → JWKS URL 映射（FORUM_ISSUERS / FORUM_JWKS_URLS 一一对应；兼容旧单值变量） */
+export function forumIssuerJwksMap(env) {
+  const issuers = parseList(env.FORUM_ISSUERS);
+  const urls = parseList(env.FORUM_JWKS_URLS);
+  if (issuers.length > 0 && issuers.length === urls.length) {
+    return new Map(issuers.map((iss, i) => [iss.replace(/\/+$/, ""), urls[i]]));
+  }
+  if (env.FORUM_JWKS_URL) {
+    const iss = (env.FORUM_ISSUER || "https://i.182030.xyz").replace(/\/+$/, "");
+    return new Map([[iss, env.FORUM_JWKS_URL]]);
+  }
+  return new Map();
 }
 
 function b64uToBytes(s) {
@@ -36,18 +65,18 @@ function b64uToBytes(s) {
   return bytes;
 }
 
-async function fetchJwks(env, force = false) {
+async function fetchJwks(env, jwksUrl, force = false) {
   const now = Date.now();
-  if (!force && jwksCache.keys && now - jwksCache.fetchedAt < JWKS_TTL_MS) {
-    return jwksCache.keys;
+  const cached = jwksCache.get(jwksUrl);
+  if (!force && cached && cached.keys && now - cached.fetchedAt < JWKS_TTL_MS) {
+    return cached.keys;
   }
-  const { jwksUrl } = forumDefaults(env);
   const res = await fetch(jwksUrl, { cf: { cacheTtl: 300, cacheEverything: true } });
   if (!res.ok) throw new Error(`JWKS 拉取失败 (${res.status})`);
   const data = await res.json();
   const keys = Array.isArray(data.keys) ? data.keys : [];
   if (keys.length === 0) throw new Error("JWKS 中没有可用公钥");
-  jwksCache = { keys, fetchedAt: now };
+  jwksCache.set(jwksUrl, { keys, fetchedAt: now });
   return keys;
 }
 
@@ -66,12 +95,12 @@ async function importPublicKey(kid, jwk) {
 }
 
 /**
- * 验证论坛 Access Token。
+ * 验证论坛 Access Token（按 Token 的 iss 选择对应签发方的 JWKS）。
  * 成功返回 { ok: true, uid, payload }；失败返回 { ok: false, reason }。
  * 遇到未知 kid 时强制刷新一次 JWKS（密钥轮换场景）。
  */
 export async function verifyForumToken(env, token) {
-  const { issuer, audience } = forumDefaults(env);
+  const { audience } = forumDefaults(env);
 
   const parts = String(token || "").split(".");
   if (parts.length !== 3) return { ok: false, reason: "malformed" };
@@ -87,7 +116,12 @@ export async function verifyForumToken(env, token) {
   if (header.alg !== "RS256") return { ok: false, reason: "alg" };
   if (typeof header.kid !== "string") return { ok: false, reason: "malformed" };
   if (payload.typ !== "access") return { ok: false, reason: "typ" };
-  if (payload.iss !== issuer) return { ok: false, reason: "iss" };
+
+  const jwksMap = forumIssuerJwksMap(env);
+  const iss = String(payload.iss || "").replace(/\/+$/, "");
+  const jwksUrl = jwksMap.get(iss);
+  if (!jwksUrl) return { ok: false, reason: "iss" };
+
   const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
   if (!aud.includes(audience)) return { ok: false, reason: "aud" };
 
@@ -99,10 +133,10 @@ export async function verifyForumToken(env, token) {
     return { ok: false, reason: "iat" };
   }
 
-  let keys = await fetchJwks(env);
+  let keys = await fetchJwks(env, jwksUrl);
   let entry = keys.find((k) => k.kid === header.kid);
   if (!entry) {
-    keys = await fetchJwks(env, true);
+    keys = await fetchJwks(env, jwksUrl, true);
     entry = keys.find((k) => k.kid === header.kid);
   }
   if (!entry) return { ok: false, reason: "unknown_kid" };
@@ -165,6 +199,12 @@ export async function forumPublicConfig(env) {
     return forumConfigCache.data;
   }
   const base = (env.FORUM_API_BASE || "https://i.182030.xyz").replace(/\/+$/, "");
+  const fallback = {
+    apiBase: base,
+    turnstileSiteKey: null,
+    registerUrl: "https://forum.182030.xyz/register",
+    ssoOrigin: forumDefaults(env).ssoOrigin
+  };
   try {
     const res = await fetch(`${base}/api/config`, { cf: { cacheTtl: 300, cacheEverything: true } });
     if (!res.ok) throw new Error(String(res.status));
@@ -172,11 +212,12 @@ export async function forumPublicConfig(env) {
     const out = {
       apiBase: base,
       turnstileSiteKey: (data && data.turnstileSiteKey) || null,
-      registerUrl: "https://forum.182030.xyz/register"
+      registerUrl: "https://forum.182030.xyz/register",
+      ssoOrigin: forumDefaults(env).ssoOrigin
     };
     forumConfigCache = { data: out, fetchedAt: now };
     return out;
   } catch {
-    return { apiBase: base, turnstileSiteKey: null, registerUrl: "https://forum.182030.xyz/register" };
+    return fallback;
   }
 }
