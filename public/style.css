@@ -616,12 +616,6 @@ body {
   color: #dc2626;
 }
 
-.auth-hint-sm {
-  margin-top: 6px;
-  font-size: 12px;
-  opacity: 0.75;
-}
-
 .sync-btn {
   margin-top: 10px;
   width: 100%;

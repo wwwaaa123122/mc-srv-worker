@@ -7,18 +7,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=7">
+  <link rel="stylesheet" href="./style.css?v=8">
 </head>
 <body>
 
-  <!-- Animated background blobs -->
   <div class="bg-blob blob-1"></div>
   <div class="bg-blob blob-2"></div>
   <div class="bg-blob blob-3"></div>
 
   <div class="app-wrapper">
 
-    <!-- Header -->
     <header class="header">
       <div class="header-icon">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -31,14 +29,12 @@
       <p class="header-subtitle">为你的 Minecraft 服务器生成带 SRV 记录的免端口域名</p>
     </header>
 
-    <!-- Card: 论坛账号 -->
     <div class="card">
       <div class="card-header">
         <span class="card-badge badge-auth">账号</span>
         <h2 class="card-title">星辰旅人论坛账号</h2>
       </div>
       <div class="card-body">
-        <!-- 已登录 -->
         <div id="auth-logged-in" class="hidden">
           <div class="user-chip">
             <img id="user-avatar" class="user-avatar" alt="头像" src="">
@@ -48,11 +44,8 @@
             </div>
             <button class="btn btn-ghost btn-sm" onclick="logout()">退出登录</button>
           </div>
-          <p class="auth-hint">创建的域名将自动绑定到你的账号，管理时无需授权码，且免人机验证。</p>
         </div>
-        <!-- 未登录 -->
         <div id="auth-logged-out">
-          <p class="auth-hint">登录论坛账号后，域名将绑定到你的账号：管理免授权码、创建免人机验证。不登录也可以继续匿名使用。</p>
           <div class="input-group">
             <label class="input-label" for="login-identifier">用户名 / 邮箱</label>
             <div class="input-wrapper">
@@ -93,14 +86,12 @@
           </div>
           <p id="login-status" class="auth-status hidden"></p>
           <button id="sync-btn" class="btn btn-ghost btn-sm sync-btn" onclick="syncForumLogin()">
-            <span>已在论坛登录？点此同步登录状态</span>
+            <span>同步论坛登录状态</span>
           </button>
-          <p class="auth-hint auth-hint-sm">同步会打开论坛窗口读取其登录状态，读不到时可正常用账号密码登录。</p>
         </div>
       </div>
     </div>
 
-    <!-- Card: 创建域名 -->
     <div class="card">
       <div class="card-header">
         <span class="card-badge badge-create">创建</span>
@@ -130,7 +121,6 @@
           </div>
         </div>
 
-        <!-- Cloudflare Turnstile 人机验证（匿名创建时需要；已登录免验证） -->
         <div id="turnstile-slot" class="turnstile-slot hidden">
           <span class="turnstile-label">人机验证</span>
           <div id="turnstile-widget"></div>
@@ -148,7 +138,6 @@
       </div>
     </div>
 
-    <!-- Card: 我的域名（登录后显示） -->
     <div id="records-card" class="card hidden">
       <div class="card-header">
         <span class="card-badge badge-manage">我的域名</span>
@@ -177,7 +166,6 @@
       </div>
     </div>
 
-    <!-- Card: 管理域名 -->
     <div class="card">
       <div class="card-header">
         <span class="card-badge badge-manage">管理</span>
@@ -236,12 +224,10 @@
       </div>
     </div>
 
-    <!-- Result -->
     <div id="result" class="result-panel hidden"></div>
 
   </div>
 
-  <!-- Footer -->
   <footer class="footer">
     <span>遇到问题？</span>
     <a href="mailto:wwwaaa123122@outlook.com">联系作者</a>
@@ -251,6 +237,6 @@
     </div>
   </footer>
 
-  <script src="./app.js?v=7"></script>
+  <script src="./app.js?v=8"></script>
 </body>
 </html>

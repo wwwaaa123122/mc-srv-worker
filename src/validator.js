@@ -1,14 +1,18 @@
+const HOST_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9_-]+\.)*[a-z0-9_-]+$/;
+
 export function validateInput(input) {
-  if (!input) return null;
+  if (typeof input !== "string" || !input) return null;
 
   const parts = input.split(":");
 
   if (parts.length !== 2) return null;
 
-  const host = parts[0].trim();
+  const host = parts[0].trim().toLowerCase();
   const port = parseInt(parts[1]);
 
-  if (!host || isNaN(port)) return null;
+  // 主机名格式：字母/数字/连字符/下划线与点，总长 ≤253，禁止空格与特殊字符
+  if (!host || !HOST_PATTERN.test(host)) return null;
+  if (isNaN(port)) return null;
 
   if (port < 1 || port > 65535) return null;
 

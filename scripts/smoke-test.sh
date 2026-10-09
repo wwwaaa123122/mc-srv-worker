@@ -222,7 +222,7 @@ assert_contains "重复前缀被拒绝 (409)" "$R" "已被占用"
 
 R=$(curl -s -X POST -H "Content-Type: application/json" \
   -d '{"address":"1.1.1.1:25565"}' "$SRV_URL/api/create")
-assert_contains "公共服务地址黑名单生效" "$R" "禁止创建解析"
+assert_contains "公共服务地址黑名单生效" "$R" "禁止用于解析"
 
 R=$(curl -s -X POST -H "Content-Type: application/json" \
   -d "{\"sub\":\"$ANON_SUB\",\"target\":\"play2.example.com\",\"port\":25566,\"authCode\":\"wrong-code\"}" \

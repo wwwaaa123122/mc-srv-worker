@@ -39,6 +39,16 @@ async function readJson(request) {
   }
 }
 
+/** 变更类接口仅接受 application/json：阻止跨站表单/简单请求触发写操作（CSRF 加固） */
+function isJsonRequest(request) {
+  const ct = (request.headers.get("content-type") || "").toLowerCase();
+  return ct.split(";")[0].trim() === "application/json";
+}
+
+function notJsonResponse() {
+  return json({ error: "请求需使用 Content-Type: application/json" }, 415);
+}
+
 /** 未通过账号验证时的 401（前端据此触发刷新/重新登录） */
 function authError(auth) {
   if (!auth.present) {
@@ -69,6 +79,7 @@ export default {
       // 登录状态同步：用论坛桥接页签发的一次性 ticket 兑换凭证
       // （浏览器只经手一次性短命 ticket；真正的 token 由本 Worker 与论坛 API 之间流转）
       if (url.pathname === "/api/sso/redeem" && request.method === "POST") {
+        if (!isJsonRequest(request)) return notJsonResponse();
         const ip = request.headers.get("cf-connecting-ip") || "";
         if (!(await rateLimitCheck(env, `sso:${ip}`))) {
           return json({ error: "操作过于频繁，请稍后再试" }, 429);
@@ -125,6 +136,12 @@ export default {
 
       // 认领历史记录：前缀 + 授权码 → 绑定到当前论坛账号
       if (url.pathname === "/api/claim" && request.method === "POST") {
+        if (!isJsonRequest(request)) return notJsonResponse();
+        const ip = request.headers.get("cf-connecting-ip") || "";
+        if (!(await rateLimitCheck(env, `claim:${ip}`))) {
+          return json({ error: "操作过于频繁，请稍后再试" }, 429);
+        }
+
         const auth = await forumUserFromRequest(env, request);
         if (!auth.ok) return authError(auth);
 
@@ -135,6 +152,9 @@ export default {
         const authCode = String(body.authCode || "").trim();
         if (!sub || !authCode) {
           return json({ error: "前缀和授权码均为必填项" }, 400);
+        }
+        if (!/^[a-z0-9](?:[a-z0-9-]{0,18}[a-z0-9])?$/.test(sub)) {
+          return json({ error: "前缀格式不正确" }, 400);
         }
 
         const dataRaw = await env.MC_KV.get(sub);
@@ -147,11 +167,21 @@ export default {
           return json({ error: "记录数据异常" }, 500);
         }
 
-        if (data.authCode !== authCode) {
+        if (!verifyAuthCode(data.authCode, authCode)) {
           return json({ error: "授权码错误" }, 403);
         }
         if (data.user_id && data.user_id !== auth.uid) {
           return json({ error: "该记录已绑定其他账号", code: "ALREADY_BOUND" }, 409);
+        }
+
+        // 认领同样计入账号配额，防止绕过 USER_RECORD_LIMIT
+        const claimQuota = parseInt(env.USER_RECORD_LIMIT || "10");
+        const claimCount = await countUserRecords(env, auth.uid);
+        if (claimCount >= claimQuota) {
+          return json(
+            { error: `当前账号绑定的域名已达上限（${claimQuota} 个）`, code: "QUOTA_EXCEEDED" },
+            409
+          );
         }
 
         const bound = await bindUser(env, auth.uid, sub, data);
@@ -169,6 +199,7 @@ export default {
 
       // 创建域名
       if (url.pathname === "/api/create" && request.method === "POST") {
+        if (!isJsonRequest(request)) return notJsonResponse();
         const ip = request.headers.get("cf-connecting-ip") || "";
         const allowed = await rateLimitCheck(env, ip);
 
@@ -262,6 +293,12 @@ export default {
 
       // 修改解析
       if (url.pathname === "/api/update" && request.method === "POST") {
+        if (!isJsonRequest(request)) return notJsonResponse();
+        const ip = request.headers.get("cf-connecting-ip") || "";
+        if (!(await rateLimitCheck(env, `upd:${ip}`))) {
+          return json({ error: "操作过于频繁，请稍后再试" }, 429);
+        }
+
         const body = await readJson(request);
         if (!body) return json({ error: "请求体不是合法 JSON" }, 400);
 
@@ -272,6 +309,16 @@ export default {
 
         if (!sub || !target || !port) {
           return json({ error: "参数不完整" }, 400);
+        }
+        if (typeof sub !== "string" || !/^[a-z0-9](?:[a-z0-9-]{0,18}[a-z0-9])?$/.test(sub.trim().toLowerCase())) {
+          return json({ error: "前缀格式不正确" }, 400);
+        }
+        if (typeof target !== "string" || !/^[a-z0-9_.:-]{1,253}$/i.test(target.trim())) {
+          return json({ error: "服务器地址格式不正确" }, 400);
+        }
+        const portNum = parseInt(port, 10);
+        if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
+          return json({ error: "端口需为 1~65535 的整数" }, 400);
         }
         if (!authCode && !auth.ok) {
           return json({ error: "请填写授权码，或先登录论坛账号" }, 400);
@@ -291,6 +338,12 @@ export default {
 
       // 删除解析
       if (url.pathname === "/api/delete" && request.method === "POST") {
+        if (!isJsonRequest(request)) return notJsonResponse();
+        const ip = request.headers.get("cf-connecting-ip") || "";
+        if (!(await rateLimitCheck(env, `del:${ip}`))) {
+          return json({ error: "操作过于频繁，请稍后再试" }, 429);
+        }
+
         const body = await readJson(request);
         if (!body) return json({ error: "请求体不是合法 JSON" }, 400);
 
