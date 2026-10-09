@@ -369,6 +369,26 @@ function loadAuth() {
   }
 }
 
+/** 退出登录：尽力撤销论坛会话链（refresh token 失效），再清除本站登录态 */
+async function logout() {
+  const refreshToken = auth.refreshToken;
+  if (refreshToken) {
+    const base = (siteConfig.forum.apiBase || 'https://i.182030.xyz').replace(/\/+$/, '');
+    try {
+      await fetch(base + '/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken })
+      });
+    } catch {
+      // 撤销失败也继续本地退出：本站不再持有该 token
+    }
+  }
+  clearAuth();
+  renderAuthState();
+  showSimpleSuccess('已退出登录');
+}
+
 function avatarUrl(user) {
   const base = (siteConfig.forum.apiBase || '').replace(/\/+$/, '');
   const raw = user && (user.avatarUrl || user.avatar_url);
